@@ -1,3 +1,4 @@
+
 console.log("script's working")
 
 let gl;
@@ -5,14 +6,19 @@ let gl;
 let vsSource =
     [
         'precision mediump float;',
-        'attribute vec2 vertPositions;',
+        'attribute vec3 vertPositions;',
         'attribute vec3 vertColor;',
         'varying vec3 fragColor;',
+        'varying vec3 fragPosition;',
+        '',
+        'uniform mat4 mWorld;',
+        'uniform mat4 mView;',
+        'uniform mat4 mProj;',
         '',
         'void main()',
         '{',
         '   fragColor = vertColor;',
-        '   gl_Position = vec4(vertPositions, 0, 1.0);',
+        '   gl_Position = mProj * mView * mWorld * vec4(vertPositions, 1.0);',
         '}',
     ].join('\n');
 
@@ -27,32 +33,25 @@ let fsSource =
         '}',
     ].join('\n');
 
-const angle = (degree) =>
-{
-    return degree * (Math.PI / 180);
-}
+    const fsSourceLines = [
+        'precision mediump float;',
+        'varying vec3 fragColor;',
+        'varying vec3 fragPosition;',
+        'void main()', 
+        '{',
+        '   int x = int(fragPosition.x * 10.0);',
+        '   float y = mod(float(x), 2.0);', 
+        '   if ((y == 0.0) && (x < 0) || (y != 0.0) && (x >= 0) || fragPosition.x <= 0.0 && fragPosition.x >= -0.1)',
+        '   {',
+        '       gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);',
+        '   }',
+        '   else',
+        '   {',
+        '       gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);',
+        '   }',
+        '}'
+    ].join('\n');
 
-const deg = 72;
-
-let pentagonVertices =
-    [ // X       y
-        0.0,    0.0,    1.0, 0.0, 0.0,
-        0.0,    0.5,   0.0, 0.0, 1.0,
-        Math.cos(angle(90 + deg)) * 0.5,    Math.sin(angle(90 + deg)) * 0.5,   0.0, 0.0, 1.0,
-        Math.cos(angle(90 + 2 * deg)) * 0.5,    Math.sin(angle(90 + 2 * deg)) * 0.5,   0.0, 0.0, 1.0,
-        Math.cos(angle(90 + 3 * deg)) * 0.5,    Math.sin(angle(90 + 3 * deg)) * 0.5,   0.0, 0.0, 1.0,
-        Math.cos(angle(90 + 4 * deg)) * 0.5,    Math.sin(angle(90 + 4 * deg)) * 0.5,   0.0, 0.0, 1.0,
-        Math.cos(angle(90 + 5 * deg)) * 0.5,    Math.sin(angle(90 + 5 * deg)) * 0.5,   0.0, 0.0, 1.0,
-
-    ];
-
-let squareVertices =
-    [
-        0.5,    0.5,    1.0, 0.0, 0.0,
-        0.5,   -0.5,   0.0, 1.0, 0.0,
-        -0.5,    -0.5,   0.0, 0.0, 1.0,
-        -0.5,    0.5,   0.0, 1.0, 1.0
-    ];
 
 function initWebGl(canvas)
 {
@@ -71,6 +70,7 @@ function initWebGl(canvas)
 
     gl.clearColor(1, 0.85, 0.85, 1);
     gl.enable(gl.DEPTH_TEST);
+    //gl.enable(gl.CULL_FACE);
     gl.depthFunc(gl.LEQUAL);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 }
@@ -113,11 +113,11 @@ function initShaderProgram(gl, vsSource, fsSource)
     return shaderProgram;
 }
 
-function initBuffer(buffer)
+function initBuffer(gl, buffer, arrType, dataType)
 {
-    let triangleVertexBufferObject = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexBufferObject);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(buffer), gl.STATIC_DRAW);
+    let BufferObject = gl.createBuffer();
+    gl.bindBuffer(arrType, BufferObject);
+    gl.bufferData(arrType, new dataType(buffer), gl.STATIC_DRAW);
 }
 
 function enableVertexAtrib(shaderProgram, attributeName, size, stride, offset)
@@ -145,19 +145,133 @@ canvas.width = 600;
 
 initWebGl(canvas);
 let shaderProgram = initShaderProgram(gl, vsSource, fsSource);
-initBuffer(pentagonVertices);
+initBuffer(gl, pentagonVertices, gl.ARRAY_BUFFER, Float32Array);
 
 let positionAttribLocation = enableVertexAtrib(
     shaderProgram,
     "vertPositions",
-    2, 5, 0);
+    3, 6, 0);
 gl.enableVertexAttribArray(positionAttribLocation);
 
 let colorAttribLocation = enableVertexAtrib(
     shaderProgram,
     "vertColor",
-    3, 5, 2);
+    3, 6, 3);
 gl.enableVertexAttribArray(colorAttribLocation);
 
 gl.useProgram(shaderProgram);
+
+
+let matWorldLocation = gl.getUniformLocation(shaderProgram, "mWorld");
+let matViewLocation = gl.getUniformLocation(shaderProgram, "mView");
+let matProjLocation = gl.getUniformLocation(shaderProgram, "mProj");
+
+let worldMatrix = new Float32Array(16);
+let viewMatrix = new Float32Array(16);
+let projMatrix = new Float32Array(16);
+
+glMatrix.mat4.identity(worldMatrix);
+glMatrix.mat4.lookAt(viewMatrix, [0, 0, -2], [0, 0, 0], [0, 1, 0]);
+glMatrix.mat4.perspective(projMatrix, angle(45), canvas.width / canvas.height, 0.1, 1000.0);
+
+gl.uniformMatrix4fv(matWorldLocation, false, worldMatrix);
+gl.uniformMatrix4fv(matViewLocation, false, viewMatrix);
+gl.uniformMatrix4fv(matProjLocation, false, projMatrix);
+
+gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 gl.drawArrays(gl.TRIANGLE_FAN, 0, 7);
+
+//
+// cube
+//
+
+canvas = document.getElementById("cube");
+canvas.height = 600;
+canvas.width = 600;
+
+initWebGl(canvas);
+let shaderProgramCube = initShaderProgram(gl, vsSource, fsSource);
+initBuffer(gl, cubeVertices, gl.ARRAY_BUFFER, Float32Array);
+initBuffer(gl, cubeIndices, gl.ELEMENT_ARRAY_BUFFER, Uint16Array);
+
+let positionAttribLocationCube = enableVertexAtrib(
+    shaderProgramCube,
+    "vertPositions",
+    3, 6, 0);
+gl.enableVertexAttribArray(positionAttribLocationCube);
+
+let colorAttribLocationCube = enableVertexAtrib(
+    shaderProgramCube,
+    "vertColor",
+    3, 6, 3);
+gl.enableVertexAttribArray(colorAttribLocationCube);
+
+gl.useProgram(shaderProgramCube);
+
+
+let matWorldLocationCube = gl.getUniformLocation(shaderProgramCube, "mWorld");
+let matViewLocationCube = gl.getUniformLocation(shaderProgramCube, "mView");
+let matProjLocationCube = gl.getUniformLocation(shaderProgramCube, "mProj");
+
+let worldMatrixCube = new Float32Array(16);
+let viewMatrixCube = new Float32Array(16);
+let projMatrixCube = new Float32Array(16);
+
+glMatrix.mat4.identity(worldMatrixCube);
+glMatrix.mat4.rotate(worldMatrixCube, worldMatrixCube, angle(45), [1, 1, 0]);
+glMatrix.mat4.lookAt(viewMatrixCube, [0, 0, -7], [0, 0, 0], [0, 1, 0]);
+glMatrix.mat4.perspective(projMatrixCube, angle(45), canvas.width / canvas.height, 0.1, 1000.0);
+
+gl.uniformMatrix4fv(matWorldLocationCube, false, worldMatrixCube);
+gl.uniformMatrix4fv(matViewLocationCube, false, viewMatrixCube);
+gl.uniformMatrix4fv(matProjLocationCube, false, projMatrixCube);
+
+gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+gl.drawElements(gl.TRIANGLES, cubeIndices.length, gl.UNSIGNED_SHORT, 0);
+
+
+//
+// Striped square
+//
+
+canvas = document.getElementById("square");
+canvas.height = 600;
+canvas.width = 600;
+
+initWebGl(canvas);
+let shaderProgramSquare = initShaderProgram(gl, vsSource, fsSourceLines);
+initBuffer(gl, squareVertices, gl.ARRAY_BUFFER, Float32Array);
+
+let positionAttribLocationSquare = enableVertexAtrib(
+    shaderProgramSquare,
+    "vertPositions",
+    3, 6, 0);
+gl.enableVertexAttribArray(positionAttribLocationSquare);
+
+let colorAttribLocationSquare = enableVertexAtrib(
+    shaderProgramSquare,
+    "vertColor",
+    3, 6, 3);
+gl.enableVertexAttribArray(colorAttribLocationSquare);
+
+gl.useProgram(shaderProgramSquare);
+
+
+let matWorldLocationSquare = gl.getUniformLocation(shaderProgramSquare, "mWorld");
+let matViewLocationSquare = gl.getUniformLocation(shaderProgramSquare, "mView");
+let matProjLocationSquare = gl.getUniformLocation(shaderProgramSquare, "mProj");
+
+let worldMatrixSquare = new Float32Array(16);
+let viewMatrixSquare = new Float32Array(16);
+let projMatrixSquare = new Float32Array(16);
+
+glMatrix.mat4.identity(worldMatrixSquare);
+glMatrix.mat4.lookAt(viewMatrixSquare, [0, 0, -2], [0, 0, 0], [0, 1, 0]);
+glMatrix.mat4.perspective(projMatrixSquare, angle(45), canvas.width / canvas.height, 0.1, 1000.0);
+
+gl.uniformMatrix4fv(matWorldLocationSquare, false, worldMatrixSquare);
+gl.uniformMatrix4fv(matViewLocationSquare, false, viewMatrixSquare);
+gl.uniformMatrix4fv(matProjLocationSquare, false, projMatrixSquare);
+
+gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+gl.drawArrays(gl.TRIANGLE_STRIP, 0, 40);

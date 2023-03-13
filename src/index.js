@@ -18,6 +18,7 @@ let vsSource =
         'void main()',
         '{',
         '   fragColor = vertColor;',
+        '   fragPosition = vertPositions;',
         '   gl_Position = mProj * mView * mWorld * vec4(vertPositions, 1.0);',
         '}',
     ].join('\n');
@@ -43,7 +44,7 @@ let fsSource =
         '   float y = mod(float(x), 2.0);', 
         '   if ((y == 0.0) && (x < 0) || (y != 0.0) && (x >= 0) || fragPosition.x <= 0.0 && fragPosition.x >= -0.1)',
         '   {',
-        '       gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);',
+        '       gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);',
         '   }',
         '   else',
         '   {',
